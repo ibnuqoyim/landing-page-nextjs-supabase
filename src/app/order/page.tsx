@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useCart } from '@/context/CartContext'
 import { Product } from '@/types'
 import { supabase } from '@/lib/supabase'
@@ -36,6 +37,7 @@ const getOptimizedImageUrl = (url: string | null, width: number = 400, height: n
 }
 
 const KURIR_OPTIONS = [
+  { id: 'cod',     label: 'COD (Cash on Delivery)',     estimate: 'Gratis', days: 'Hari ini', desc: 'Bayar saat barang diterima' },
   { id: 'ahsan',     label: 'Ahsan Express',     estimate: 'Rp 10.000 – Rp 12.000', days: 'Hari ini', desc: 'Khusus Bandung dan sekitarnya' },
   { id: 'spx',     label: 'Shopee Express',      estimate: 'Rp 9.000 – Rp 22.000', days: '2 Jam', desc: 'Untuk pengiriman < 5KM' },
   { id: 'tiki', label: 'Tiki',           estimate: 'Rp 10.000 – Rp 20.000', days: '1-3 hari', desc: 'Pengiriman Luar Kota' },
@@ -46,7 +48,8 @@ const inputClass =
   'w-full bg-white border border-[#E8D5B7] px-4 py-3 font-lato text-sm text-[#2C1A0E] placeholder-[#C8956C]/50 focus:outline-none focus:border-[#C8956C] focus:ring-1 focus:ring-[#C8956C]/30 rounded-lg'
 
 export default function OrderPage() {
-  const { items, addToCart, updateQuantity, removeFromCart, totalPrice } = useCart()
+  const router = useRouter()
+  const { items, addToCart, updateQuantity, removeFromCart, clearCart, totalPrice } = useCart()
 
   const [name, setName]               = useState('')
   const [phone, setPhone]             = useState('')
@@ -54,6 +57,8 @@ export default function OrderPage() {
   const [selectedKurir, setSelectedKurir] = useState('')
   const [showPicker, setShowPicker]   = useState(false)
   const [errors, setErrors]           = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Products for the picker — fetched from Supabase, fallback to mock
   const [pickerProducts, setPickerProducts] = useState<Product[]>([])
@@ -92,8 +97,180 @@ export default function OrderPage() {
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
+  const normalizePhone = (raw: string) => raw.replace(/[^\d]/g, '')
+
+  const buildPhoneCandidates = (raw: string) => {
+    const n = normalizePhone(raw)
+    if (!n) return []
+    const candidates = new Set<string>([n])
+    if (n.startsWith('0')) candidates.add(`62${n.slice(1)}`)
+    if (n.startsWith('62')) candidates.add(`0${n.slice(2)}`)
+    return Array.from(candidates)
+  }
+
+  const formatDateYYYYMMDD = (d: Date) => {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const generateInvoiceNumber = async (): Promise<string> => {
+    try {
+            // Get all orders sorted by invoice_number descending to get the latest one
+            const { data: orders, error } = await supabase
+                .from('orders')
+                .select('invoice_number')
+                .order('invoice_number', { ascending: false })
+                .limit(1)
+
+            if (error) throw error
+
+            const now = new Date()
+            const currentYYYY = String(now.getFullYear())
+            const currentMM = String(now.getMonth() + 1).padStart(2, '0')
+            const currentYYYYMM = currentYYYY + currentMM
+
+            // If no orders exist, start with YYYYMM00
+            if (!orders || orders.length === 0) {
+                return currentYYYYMM + '00'
+            }
+
+            const lastInvoiceNumber = orders[0].invoice_number
+            const lastYYYYMM = lastInvoiceNumber.slice(0, 6)
+            const lastXX = parseInt(lastInvoiceNumber.slice(6, 8), 10)
+
+            console.log('Last Invoice:', lastInvoiceNumber, 'Current YYYYMM:', currentYYYYMM)
+
+            // If YYYY``MM is the same, increment XX
+            if (lastYYYYMM === currentYYYYMM) {
+                const nextXX = lastXX + 1
+                if (nextXX > 99) {
+                    throw new Error('Invoice number counter exceeded maximum (99)')
+                }
+                return currentYYYYMM + String(nextXX).padStart(2, '0')
+            } else {
+                // If YYYYMM is different, reset to YYYYMM00
+                return currentYYYYMM + '00'
+            }
+        } catch (error) {
+            console.error('Error generating invoice number:', error)
+            // Fallback: generate based on current date
+            const now = new Date()
+            const yyyy = String(now.getFullYear())
+            const mm = String(now.getMonth() + 1).padStart(2, '0')
+            return yyyy + mm + '00'
+        }
+  }
+
+  const getLatestPoId = async (): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('batch_po')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) return null
+      return (data as { id?: string } | null)?.id ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const getCustomerIdByPhone = async (rawPhone: string, customerName: string, customerAddress: string): Promise<string | null> => {
+    const candidates = buildPhoneCandidates(rawPhone)
+    if (candidates.length === 0) return null
+    try {
+      // First try to find existing customer
+      const { data, error } = await supabase
+        .from('customers')
+        .select('id')
+        .in('phone', candidates)
+        .limit(1)
+        .maybeSingle()
+      
+      if (error) return null
+      
+      // If customer exists, return their ID
+      if (data && data.id) {
+        return data.id
+      }
+      
+      // If no customer found, create new one
+      const { data: newCustomer, error: createError } = await supabase
+        .from('customers')
+        .insert({
+          name: customerName.trim(),
+          phone: normalizePhone(rawPhone),
+          address: customerAddress.trim() || null,
+          total_purchases: 0,
+        })
+        .select('id')
+        .single()
+      
+      if (createError) {
+        console.error('Error creating customer:', createError)
+        return null
+      }
+      
+      return newCustomer?.id || null
+    } catch (error) {
+      console.error('Error in getCustomerIdByPhone:', error)
+      return null
+    }
+  }
+
+  const handleSubmit = async () => {
     if (!validate()) return
+    if (isSubmitting) return
+    setSubmitError(null)
+    setIsSubmitting(true)
+
+    const now = new Date()
+    const orderDate = formatDateYYYYMMDD(now)
+    const [invoiceNumber, poId, customerId] = await Promise.all([
+      generateInvoiceNumber(),
+      getLatestPoId(),
+      getCustomerIdByPhone(phone, name, address),
+    ])
+
+    const { data: createdOrder, error: orderError } = await supabase
+      .from('orders')
+      .insert({
+        customer_name: name.trim(),
+        phone: normalizePhone(phone) || null,
+        invoice_number: invoiceNumber,
+        date: orderDate,
+        po_id: poId,
+        customer_id: customerId,
+      })
+      .select('id')
+      .single()
+
+    if (orderError || !createdOrder?.id) {
+      setSubmitError('Gagal menyimpan pesanan. Silakan coba lagi.')
+      setIsSubmitting(false)
+      return
+    }
+
+    const orderItemsPayload = items.map(i => ({
+      order_id: createdOrder.id,
+      product_id: i.id,
+      quantity: i.quantity,
+      price: Number(i.price),
+    }))
+
+    const { error: itemsError } = await supabase
+      .from('order_items')
+      .insert(orderItemsPayload)
+
+    if (itemsError) {
+      setSubmitError('Pesanan tersimpan, tapi gagal menyimpan item. Silakan hubungi admin.')
+      setIsSubmitting(false)
+      return
+    }
+
     const kurir = KURIR_OPTIONS.find(k => k.id === selectedKurir)
     const productLines = items
       .map(i => `- ${i.name} x${i.quantity} = Rp ${(Number(i.price) * i.quantity).toLocaleString('id-ID')}`)
@@ -101,6 +278,7 @@ export default function OrderPage() {
     const msg = [
       `*Pesanan Baru - Kudapanmu_ya* 🍞`,
       ``,
+      `*Invoice:* ${invoiceNumber}`,
       `*Nama:* ${name}`,
       `*No HP:* ${phone}`,
       `*Alamat:* ${address}`,
@@ -114,6 +292,12 @@ export default function OrderPage() {
     ].join('\n')
     const waNumber = process.env.NEXT_PUBLIC_WA_NUMBER ?? '6281234567890'
     window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, '_blank')
+    window.alert(`terimakasih sudah pesan produk kami, no pesanan anda ini (${invoiceNumber})`)
+    clearCart()
+    router.push('/')
+    setIsSubmitting(false)
+
+    
   }
 
   return (
@@ -176,12 +360,12 @@ export default function OrderPage() {
 
                 <div>
                   <label className="font-lato text-xs tracking-widest uppercase text-[#8B5A2B] mb-2 block">
-                    No HP / WhatsApp <span className="text-red-400">*</span>
+                    No HP / WhatsApp (Contoh: 628123456789) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="tel"
                     className={inputClass}
-                    placeholder="Contoh: 08123456789"
+                    placeholder="Contoh: 628123456789"
                     value={phone}
                     onChange={e => { setPhone(e.target.value); setErrors(p => ({ ...p, phone: '' })) }}
                   />
@@ -210,7 +394,6 @@ export default function OrderPage() {
                 <Truck className="h-5 w-5 text-[#C8956C]" />
                 <h2 className="font-playfair text-xl font-semibold text-[#2C1A0E]">Pilihan Kurir</h2>
               </div>
-              <p className="font-lato text-xs text-[#C8956C] mb-6 tracking-wide uppercase">Estimasi ongkir area Jabodetabek</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {KURIR_OPTIONS.map(kurir => (
@@ -396,11 +579,26 @@ export default function OrderPage() {
 
               <Button
                 onClick={handleSubmit}
+                disabled={isSubmitting}
                 className="w-full bg-[#5C3317] hover:bg-[#2C1A0E] text-[#F5EAD0] font-lato tracking-wide text-sm rounded-none h-12 transition-all duration-300"
               >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                Pesan via WhatsApp
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Pesan via WhatsApp
+                  </>
+                )}
               </Button>
+              {submitError && (
+                <p className="font-lato text-xs text-red-400 text-center mt-3">
+                  {submitError}
+                </p>
+              )}
               <p className="font-lato text-xs text-[#C8956C] text-center mt-3">
                 Pesanan dikonfirmasi via WhatsApp
               </p>
