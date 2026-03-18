@@ -9,6 +9,26 @@ import Image from 'next/image'
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&q=80'
 
+// Cloudinary image resize helper
+const getOptimizedImageUrl = (url: string | null, width: number = 400, height: number = 400) => {
+  if (!url) return FALLBACK_IMAGE
+  
+  // Check if it's a Cloudinary URL
+  if (url.includes('cloudinary.com')) {
+    // Extract base URL and add resize parameters
+    const baseUrl = url.split('/upload/')[0] + '/upload/'
+    const publicId = url.split('/upload/')[1]?.replace(/^v\d+/, '')
+    
+    if (publicId) {
+      // Add resize parameters: w_400,h_400,c_fill,f_auto,q_auto
+      return `${baseUrl}w_${width},h_${height},c_fill,f_auto,q_auto/${publicId}`
+    }
+  }
+  
+  // For non-Cloudinary URLs, return as-is
+  return url
+}
+
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, totalPrice, clearCart } = useCart()
 
@@ -82,7 +102,7 @@ export default function CartPage() {
                 {/* Image */}
                 <div className="relative w-20 h-20 rounded-xl overflow-hidden bg-[#F5EAD0] flex-shrink-0">
                   <Image
-                    src={item.image_url ?? FALLBACK_IMAGE}
+                    src={getOptimizedImageUrl(item.image_url, 80, 80)}
                     alt={item.name}
                     fill
                     className="object-cover"

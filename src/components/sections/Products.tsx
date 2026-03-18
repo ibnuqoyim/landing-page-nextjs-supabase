@@ -11,6 +11,26 @@ import Image from 'next/image'
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=600&q=80'
 
+// Cloudinary image resize helper
+const getOptimizedImageUrl = (url: string | null, width: number = 600, height: number = 400) => {
+  if (!url) return FALLBACK_IMAGE
+  
+  // Check if it's a Cloudinary URL
+  if (url.includes('cloudinary.com')) {
+    // Extract base URL and add resize parameters
+    const baseUrl = url.split('/upload/')[0] + '/upload/'
+    const publicId = url.split('/upload/')[1]?.replace(/^v\d+/, '')
+    
+    if (publicId) {
+      // Add resize parameters: w_600,h_400,c_fill,f_auto,q_auto
+      return `${baseUrl}w_${width},h_${height},c_fill,f_auto,q_auto/${publicId}`
+    }
+  }
+  
+  // For non-Cloudinary URLs, return as-is
+  return url
+}
+
 export default function Products() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -77,7 +97,7 @@ export default function Products() {
               {/* Image */}
               <div className="relative h-56 w-full overflow-hidden bg-[#F5EAD0]">
                 <Image
-                  src={product.image_url ?? FALLBACK_IMAGE}
+                  src={getOptimizedImageUrl(product.image_url, 600, 400)}
                   alt={product.name}
                   fill
                   className="object-cover group-hover:scale-105 transition-transform duration-500"

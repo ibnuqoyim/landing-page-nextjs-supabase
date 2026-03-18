@@ -15,6 +15,26 @@ import {
 
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400&q=80'
 
+// Cloudinary image resize helper
+const getOptimizedImageUrl = (url: string | null, width: number = 400, height: number = 400) => {
+  if (!url) return FALLBACK_IMAGE
+  
+  // Check if it's a Cloudinary URL
+  if (url.includes('cloudinary.com')) {
+    // Extract base URL and add resize parameters
+    const baseUrl = url.split('/upload/')[0] + '/upload/'
+    const publicId = url.split('/upload/')[1]?.replace(/^v\d+/, '')
+    
+    if (publicId) {
+      // Add resize parameters: w_400,h_400,c_fill,f_auto,q_auto
+      return `${baseUrl}w_${width},h_${height},c_fill,f_auto,q_auto/${publicId}`
+    }
+  }
+  
+  // For non-Cloudinary URLs, return as-is
+  return url
+}
+
 const KURIR_OPTIONS = [
   { id: 'ahsan',     label: 'Ahsan Express',     estimate: 'Rp 10.000 – Rp 12.000', days: 'Hari ini', desc: 'Khusus Bandung dan sekitarnya' },
   { id: 'spx',     label: 'Shopee Express',      estimate: 'Rp 9.000 – Rp 22.000', days: '2 Jam', desc: 'Untuk pengiriman < 5KM' },
@@ -254,7 +274,7 @@ export default function OrderPage() {
                     <div key={item.id} className="flex gap-4 p-4 bg-[#FDF8F0] border border-[#E8D5B7] rounded-xl">
                       <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-[#F5EAD0] flex-shrink-0">
                         <Image
-                          src={item.image_url ?? FALLBACK_IMAGE}
+                          src={getOptimizedImageUrl(item.image_url, 64, 64)}
                           alt={item.name}
                           fill
                           className="object-cover"
@@ -438,7 +458,7 @@ export default function OrderPage() {
                       >
                         <div className="relative w-16 h-16 rounded-lg overflow-hidden bg-[#F5EAD0] flex-shrink-0">
                           <Image
-                            src={product.image_url ?? FALLBACK_IMAGE}
+                            src={getOptimizedImageUrl(product.image_url, 64, 64)}
                             alt={product.name}
                             fill
                             className="object-cover"
