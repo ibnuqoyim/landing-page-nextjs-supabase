@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Star, Loader2, Quote } from 'lucide-react'
 import { Testimonial } from '@/types'
+import { supabase } from '@/lib/supabase'
 
 const avatarColors = [
   'bg-[#C8956C]',
@@ -14,6 +15,8 @@ const avatarColors = [
 export default function Testimonials() {
   const [testimonials, setTestimonials] = useState<Testimonial[]>([])
   const [loading, setLoading] = useState(true)
+  const [averageRating, setAverageRating] = useState<number | null>(null)
+  const [totalReviews, setTotalReviews] = useState<number | null>(null)
 
   useEffect(() => {
     fetchTestimonials()
@@ -21,35 +24,41 @@ export default function Testimonials() {
 
   const fetchTestimonials = async () => {
     try {
-      const mockTestimonials: Testimonial[] = [
-        {
-          id: '1',
-          name: 'Sarah W.',
-          content: 'Sourdough-nya luar biasa! Crust-nya renyah dan teksturnya sempurna. Sudah jadi langganan rutin setiap minggu untuk keluarga saya.',
-          rating: 5
-        },
-        {
-          id: '2',
-          name: 'Budi K.',
-          content: 'Kombucha Berry favorit keluarga saya. Segar, tidak terlalu manis, dan benar-benar membantu pencernaan anak-anak.',
-          rating: 5
-        },
-        {
-          id: '3',
-          name: 'Maya L.',
-          content: 'Kimchi-nya authentic banget! Rasanya pedas pas dan fermentasinya sempurna. Cocok banget untuk masakan rumahan.',
-          rating: 5
-        },
-        {
-          id: '4',
-          name: 'Andi P.',
-          content: 'Pelayanan cepat dan produk selalu fresh. Harga worth it untuk kualitas artisan seperti ini. Highly recommended!',
-          rating: 4
+      const [listResult, statsResult] = await Promise.all([
+        supabase
+          .from('testimonials')
+          .select('id, name, job, content, rating')
+          .order('created_at', { ascending: false })
+          .limit(4),
+        supabase
+          .from('testimonials')
+          .select('rating', { count: 'exact', head: false }),
+      ])
+
+      if (listResult.error) {
+        console.error('Error fetching testimonials:', listResult.error)
+        setTestimonials([])
+      } else {
+        setTestimonials((listResult.data as Testimonial[]) || [])
+      }
+
+      if (statsResult.error) {
+        console.error('Error fetching testimonial stats:', statsResult.error)
+      } else {
+        const ratings = (statsResult.data as { rating: number }[]) || []
+        const count = statsResult.count ?? ratings.length
+        if (count > 0 && ratings.length > 0) {
+          const sum = ratings.reduce((acc, r) => acc + (r.rating ?? 0), 0)
+          setAverageRating(sum / count)
+          setTotalReviews(count)
+        } else {
+          setAverageRating(null)
+          setTotalReviews(null)
         }
-      ]
-      setTestimonials(mockTestimonials)
-    } catch {
-      // error handled
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching testimonials:', err)
+      setTestimonials([])
     } finally {
       setLoading(false)
     }
@@ -130,7 +139,7 @@ export default function Testimonials() {
                   <p className="font-playfair font-semibold text-[#2C1A0E] text-sm">
                     {testimonial.name}
                   </p>
-                  <p className="font-lato text-xs text-[#C8956C]">Pelanggan Setia</p>
+                  <p className="font-lato text-xs text-[#C8956C]">{testimonial.job}</p>
                 </div>
               </div>
             </div>
@@ -138,18 +147,24 @@ export default function Testimonials() {
         </div>
 
         {/* Overall rating */}
-        <div className="mt-14 text-center">
-          <div className="inline-flex items-center gap-4 bg-[#F5EAD0] border border-[#E8D5B7] rounded-full px-8 py-4">
-            <div className="flex gap-1">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-5 w-5 text-[#C8956C] fill-[#C8956C]" />
-              ))}
+        {averageRating !== null && totalReviews !== null && (
+          <div className="mt-14 text-center">
+            <div className="inline-flex items-center gap-4 bg-[#F5EAD0] border border-[#E8D5B7] rounded-full px-8 py-4">
+              <div className="flex gap-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star key={i} className="h-5 w-5 text-[#C8956C] fill-[#C8956C]" />
+                ))}
+              </div>
+              <div className="h-4 w-px bg-[#E8D5B7]" />
+              <p className="font-playfair text-[#2C1A0E] font-bold text-lg">
+                {averageRating.toFixed(1)}
+              </p>
+              <p className="font-lato text-xs text-[#8B5A2B]">
+                dari {totalReviews.toLocaleString('id-ID')} ulasan
+              </p>
             </div>
-            <div className="h-4 w-px bg-[#E8D5B7]" />
-            <p className="font-playfair text-[#2C1A0E] font-bold text-lg">4.9</p>
-            <p className="font-lato text-xs text-[#8B5A2B]">dari 500+ ulasan</p>
           </div>
-        </div>
+        )}
       </div>
     </section>
   )

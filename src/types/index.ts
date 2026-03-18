@@ -17,6 +17,7 @@ export interface CartItem extends Product {
 export interface Testimonial {
   id: string
   name: string
+  job: string
   content: string
   rating: number
   avatar_url?: string
