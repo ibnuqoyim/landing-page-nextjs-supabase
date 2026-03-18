@@ -3,30 +3,33 @@
 import { Button } from '@/components/ui/button'
 import { Instagram, MessageCircle, Mail, Send } from 'lucide-react'
 import Link from 'next/link'
+import { useStoreInfo } from '@/context/StoreInfoContext'
 
 export default function Contact() {
+  const { storeInfo } = useStoreInfo()
+
   const contacts = [
     {
       icon: Instagram,
       label: 'Instagram',
-      value: '@sourdoughmu_ya',
-      href: 'https://instagram.com/sourdoughmu_ya',
+      value: storeInfo?.contact_instagram_handle ?? '@sourdoughmu_ya',
+      href: storeInfo?.contact_instagram_url ?? 'https://instagram.com/sourdoughmu_ya',
       bg: 'bg-[#F5EAD0]',
       iconColor: 'text-[#8B5A2B]',
     },
     {
       icon: MessageCircle,
       label: 'WhatsApp',
-      value: '+62 821-1564-5571',
-      href: 'https://wa.me/6282115645571',
+      value: storeInfo?.contact_whatsapp_number ?? '+62 821-1564-5571',
+      href: storeInfo?.contact_whatsapp_url ?? 'https://wa.me/6282115645571',
       bg: 'bg-[#F5EAD0]',
       iconColor: 'text-[#8B5A2B]',
     },
     {
       icon: Mail,
       label: 'Email',
-      value: 'hello@sourdoughmu.id',
-      href: 'mailto:hello@sourdoughmu.id',
+      value: storeInfo?.contact_email ?? storeInfo?.email ?? 'hello@sourdoughmu.id',
+      href: `mailto:${storeInfo?.contact_email ?? storeInfo?.email ?? 'hello@sourdoughmu.id'}`,
       bg: 'bg-[#F5EAD0]',
       iconColor: 'text-[#8B5A2B]',
     }

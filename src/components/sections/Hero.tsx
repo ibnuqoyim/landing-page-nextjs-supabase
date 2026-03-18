@@ -1,23 +1,57 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useStoreInfo } from '@/context/StoreInfoContext'
 
 export default function Hero() {
+  const { storeInfo } = useStoreInfo()
+  const images = useMemo(() => storeInfo?.hero_images?.filter(Boolean) ?? [], [storeInfo?.hero_images])
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  useEffect(() => {
+    if (!images || images.length <= 1) return
+    const t = window.setInterval(() => {
+      setActiveIdx((i) => (i + 1) % images.length)
+    }, 4500)
+    return () => window.clearInterval(t)
+  }, [images])
+
+  const heroTitle = storeInfo?.hero_title ?? 'Kudapanmu_ya'
+  const heroKicker = storeInfo?.hero_kicker ?? 'Artisan & Fermented'
+  const heroTagline = storeInfo?.hero_tagline ?? 'Fermented with Love, Baked with Passion'
+  const heroDescription =
+    storeInfo?.hero_description ??
+    'Temukan kelezatan autentik sourdough, kombucha segar, kimchi homemade dan kudapan sehat lainnya yang dibuat dengan resep tradisional dan fermentasi alami — untuk keluarga yang Anda cintai.'
+
+  const stats =
+    storeInfo?.hero_stats ?? [
+      { value: '100%', label: 'Bahan Alami' },
+      { value: '3+', label: 'Tahun Pengalaman' },
+      { value: '100+', label: 'Pelanggan Puas' },
+    ]
+
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
-        <Image
-          src="https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=1920&q=85"
-          alt="Artisan sourdough bread"
-          fill
-          className="object-cover object-center"
-          priority
-          unoptimized
-        />
+        {(images.length ? images : ['https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=1920&q=85']).map((src, i) => (
+          <Image
+            key={`${src}-${i}`}
+            src={src}
+            alt="Hero background"
+            fill
+            className={[
+              'object-cover object-center transition-opacity duration-1000',
+              i === activeIdx ? 'opacity-100' : 'opacity-0',
+            ].join(' ')}
+            priority={i === 0}
+            unoptimized
+          />
+        ))}
         {/* Warm overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-[#2C1A0E]/85 via-[#5C3317]/60 to-[#2C1A0E]/30" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#2C1A0E]/60 via-transparent to-transparent" />
@@ -33,21 +67,20 @@ export default function Hero() {
           <div className="flex items-center gap-3 mb-6">
             <div className="h-px w-12 bg-[#C8956C]" />
             <span className="font-lato text-xs tracking-[0.3em] uppercase text-[#E8D5B7]">
-              Artisan & Fermented
+              {heroKicker}
             </span>
           </div>
 
           <h1 className="font-playfair text-5xl md:text-7xl font-bold text-white mb-4 leading-tight">
-            Kudapanmu_ya
+            {heroTitle}
           </h1>
 
           <p className="font-lato text-lg md:text-xl text-[#E8D5B7] mb-4 font-light tracking-wide italic">
-            Fermented with Love, Baked with Passion
+            {heroTagline}
           </p>
 
           <p className="font-lato text-base text-[#F5EAD0]/80 mb-10 leading-relaxed max-w-lg">
-            Temukan kelezatan autentik sourdough, kombucha segar, kimchi homemade dan kudapan sehat lainnya
-            yang dibuat dengan resep tradisional dan fermentasi alami — untuk keluarga yang Anda cintai.
+            {heroDescription}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
@@ -74,11 +107,7 @@ export default function Hero() {
 
           {/* Stats bar */}
           <div className="flex gap-8 mt-14 pt-8 border-t border-[#E8D5B7]/20">
-            {[
-              { value: '100%', label: 'Bahan Alami' },
-              { value: '3+', label: 'Tahun Pengalaman' },
-              { value: '100+', label: 'Pelanggan Puas' },
-            ].map((stat) => (
+            {stats.map((stat) => (
               <div key={stat.label}>
                 <p className="font-playfair text-2xl font-bold text-[#E8D5B7]">{stat.value}</p>
                 <p className="font-lato text-xs text-[#F5EAD0]/60 tracking-wide uppercase mt-1">{stat.label}</p>
