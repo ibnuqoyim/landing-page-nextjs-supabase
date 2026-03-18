@@ -117,12 +117,6 @@ export default function CartPage() {
                       <h3 className="font-playfair font-semibold text-[#2C1A0E] truncate">
                         {item.name}
                       </h3>
-                      {item.weight && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Scale className="h-3 w-3 text-[#C8956C]" />
-                          <span className="font-lato text-xs text-[#C8956C]">{item.weight} gram</span>
-                        </div>
-                      )}
                     </div>
                     <button
                       onClick={() => removeFromCart(item.id)}

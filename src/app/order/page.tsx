@@ -96,7 +96,7 @@ export default function OrderPage() {
     if (!validate()) return
     const kurir = KURIR_OPTIONS.find(k => k.id === selectedKurir)
     const productLines = items
-      .map(i => `- ${i.name}${i.weight ? ` (${i.weight}g)` : ''} x${i.quantity} = Rp ${(Number(i.price) * i.quantity).toLocaleString('id-ID')}`)
+      .map(i => `- ${i.name} x${i.quantity} = Rp ${(Number(i.price) * i.quantity).toLocaleString('id-ID')}`)
       .join('\n')
     const msg = [
       `*Pesanan Baru - Kudapanmu_ya* 🍞`,
@@ -288,12 +288,6 @@ export default function OrderPage() {
                             <p className="font-playfair font-semibold text-sm text-[#2C1A0E] truncate">
                               {item.name}
                             </p>
-                            {item.weight && (
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Scale className="h-3 w-3 text-[#C8956C]" />
-                                <span className="font-lato text-xs text-[#C8956C]">{item.weight} gram</span>
-                              </div>
-                            )}
                           </div>
                           <button
                             onClick={() => removeFromCart(item.id)}
@@ -469,12 +463,6 @@ export default function OrderPage() {
                           <p className="font-playfair text-sm font-semibold text-[#2C1A0E] leading-tight">
                             {product.name}
                           </p>
-                          {product.weight && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Scale className="h-3 w-3 text-[#C8956C]" />
-                              <span className="font-lato text-xs text-[#C8956C]">{product.weight}g</span>
-                            </div>
-                          )}
                           <p className="font-lato text-xs text-[#5C3317] font-semibold mt-1">
                             Rp {Number(product.price).toLocaleString('id-ID')}
                           </p>
